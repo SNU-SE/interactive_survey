@@ -1,0 +1,5 @@
+{
+  "name": "Interactive Survey Builder",
+  "description": "An interactive survey web application where teachers can create image-based surveys with clickable and fillable questions, and students can respond using a simple code. Inspired by Classkick and Google Forms.",
+  "requestFramePermissions": []
+}
