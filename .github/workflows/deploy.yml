@@ -54,12 +54,10 @@ jobs:
         echo "✅ Build verification passed"
         ls -la dist/
       
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+    - name: Upload to GitHub Pages
+      uses: actions/upload-pages-artifact@v3
       with:
-        name: github-pages
         path: ./dist
-        retention-days: 1
 
   deploy:
     needs: build
@@ -77,17 +75,6 @@ jobs:
     steps:
     - name: Setup Pages
       uses: actions/configure-pages@v4
-      
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: github-pages
-        path: ./dist
-        
-    - name: Upload to GitHub Pages
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: ./dist
         
     - name: Deploy to GitHub Pages
       id: deployment
