@@ -1,5 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { Survey, Submission } from '../types';
+import { db } from '../firebase';
+import { collection, addDoc, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
 
 interface SurveyContextType {
   surveys: Survey[];
@@ -15,79 +17,124 @@ interface SurveyContextType {
 
 const SurveyContext = createContext<SurveyContextType | undefined>(undefined);
 
-// Helper function to get data from localStorage safely
-const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-    try {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-        console.error(`Error reading from localStorage key "${key}":`, error);
-        return defaultValue;
-    }
-};
 
 export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [surveys, setSurveys] = useState<Survey[]>(() => getFromLocalStorage<Survey[]>('surveys', []));
-  const [loadingSurveys, setLoadingSurveys] = useState<boolean>(false); // localStorage is synchronous
-  const [submissions, setSubmissions] = useState<Submission[]>([]); // For a specific survey
+  const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [loadingSurveys, setLoadingSurveys] = useState<boolean>(true);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState<boolean>(false);
 
-  // Persist surveys to localStorage whenever they change
+  // Load surveys from Firebase on mount
   useEffect(() => {
-    try {
-      localStorage.setItem('surveys', JSON.stringify(surveys));
-    } catch (error) {
-      console.error('Failed to save surveys to localStorage:', error);
-    }
-  }, [surveys]);
+    const loadSurveys = async () => {
+      try {
+        setLoadingSurveys(true);
+        const surveysSnapshot = await getDocs(collection(db, 'surveys'));
+        const surveysData: Survey[] = [];
+        surveysSnapshot.forEach((doc) => {
+          surveysData.push({ id: doc.id, ...doc.data() } as Survey);
+        });
+        setSurveys(surveysData);
+      } catch (error) {
+        console.error('Error loading surveys from Firebase:', error);
+        setSurveys([]);
+      } finally {
+        setLoadingSurveys(false);
+      }
+    };
+
+    loadSurveys();
+  }, []);
 
   const getSurvey = useCallback(async (id: string) => {
     return surveys.find(s => s.id === id);
   }, [surveys]);
 
   const addSurvey = async (surveyData: Omit<Survey, 'id'>) => {
-    // Images are already base64, no upload needed.
-    const newSurvey: Survey = {
-      ...surveyData,
-      id: `s_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      submissionCount: 0,
-    };
-    setSurveys(prev => [...prev, newSurvey]);
-    return newSurvey;
+    try {
+      const docRef = await addDoc(collection(db, 'surveys'), {
+        ...surveyData,
+        submissionCount: 0,
+        createdAt: new Date()
+      });
+      
+      const newSurvey: Survey = {
+        ...surveyData,
+        id: docRef.id,
+        submissionCount: 0,
+      };
+      
+      setSurveys(prev => [...prev, newSurvey]);
+      return newSurvey;
+    } catch (error) {
+      console.error('Error saving survey to Firebase:', error);
+      throw new Error('설문 저장에 실패했습니다. Firebase 연결을 확인해주세요.');
+    }
   };
 
   const updateSurvey = async (updatedSurvey: Survey) => {
-    // Images are already base64, no upload needed.
-    setSurveys(prev => prev.map(s => s.id === updatedSurvey.id ? updatedSurvey : s));
+    try {
+      await updateDoc(doc(db, 'surveys', updatedSurvey.id), {
+        ...updatedSurvey,
+        updatedAt: new Date()
+      });
+      
+      setSurveys(prev => prev.map(s => s.id === updatedSurvey.id ? updatedSurvey : s));
+    } catch (error) {
+      console.error('Error updating survey in Firebase:', error);
+      throw new Error('설문 업데이트에 실패했습니다. Firebase 연결을 확인해주세요.');
+    }
   };
 
   const addSubmission = async (submissionData: Omit<Submission, 'id'>) => {
-    const allSubmissions = getFromLocalStorage<Submission[]>('submissions', []);
-    const newSubmission: Submission = {
-      ...submissionData,
-      id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-    };
-    
     try {
-      localStorage.setItem('submissions', JSON.stringify([...allSubmissions, newSubmission]));
+      const docRef = await addDoc(collection(db, 'submissions'), {
+        ...submissionData,
+        submittedAt: new Date()
+      });
+      
+      const newSubmission: Submission = {
+        ...submissionData,
+        id: docRef.id,
+      };
+      
+      // Update submission count on the corresponding survey
+      const surveyRef = doc(db, 'surveys', submissionData.surveyId);
+      const currentSurvey = surveys.find(s => s.id === submissionData.surveyId);
+      if (currentSurvey) {
+        await updateDoc(surveyRef, {
+          submissionCount: (currentSurvey.submissionCount || 0) + 1
+        });
+        
+        setSurveys(prev => prev.map(s => 
+            s.id === submissionData.surveyId 
+                ? { ...s, submissionCount: (s.submissionCount || 0) + 1 } 
+                : s
+        ));
+      }
+      
     } catch (error) {
-      console.error('Failed to save submission to localStorage:', error);
+      console.error('Error saving submission to Firebase:', error);
+      throw new Error('응답 저장에 실패했습니다. Firebase 연결을 확인해주세요.');
     }
-    
-    // Update submission count on the corresponding survey
-    setSurveys(prev => prev.map(s => 
-        s.id === submissionData.surveyId 
-            ? { ...s, submissionCount: (s.submissionCount || 0) + 1 } 
-            : s
-    ));
   };
 
   const fetchSubmissionsForSurvey = useCallback(async (surveyId: string) => {
     setLoadingSubmissions(true);
-    const allSubmissions = getFromLocalStorage<Submission[]>('submissions', []);
-    const surveySubmissions = allSubmissions.filter(s => s.surveyId === surveyId);
-    setSubmissions(surveySubmissions);
-    setLoadingSubmissions(false);
+    try {
+      const q = query(collection(db, 'submissions'), where('surveyId', '==', surveyId));
+      const submissionsSnapshot = await getDocs(q);
+      const submissionsData: Submission[] = [];
+      submissionsSnapshot.forEach((doc) => {
+        submissionsData.push({ id: doc.id, ...doc.data() } as Submission);
+      });
+      setSubmissions(submissionsData);
+    } catch (error) {
+      console.error('Error fetching submissions from Firebase:', error);
+      setSubmissions([]);
+    } finally {
+      setLoadingSubmissions(false);
+    }
   }, []);
 
 

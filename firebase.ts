@@ -1,44 +1,54 @@
-// FIX: Corrected the Firebase v8 compat import.
-// The namespace import (`import * as firebase`) was incorrect for the compat library.
-// Using a default import (`import firebase from ...`) correctly loads the Firebase SDK.
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
-import 'firebase/compat/storage';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
-// --- URGENT ACTION REQUIRED ---
-// Replace the placeholder values below with your actual Firebase project configuration.
-// You can find this in the Firebase console:
-// Project settings > General > Your apps > Firebase SDK snippet > Config
+// Firebase configuration using environment variables
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY", // <--- REPLACE
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // <--- REPLACE
-  projectId: "YOUR_PROJECT_ID", // <--- REPLACE
-  storageBucket: "YOUR_PROJECT_ID.appspot.com", // <--- REPLACE
-  messagingSenderId: "YOUR_SENDER_ID", // <--- REPLACE
-  appId: "YOUR_APP_ID" // <--- REPLACE
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Check if the config is still using placeholder values
-if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-  // We can't throw an error here as it would stop the app from rendering at all.
-  // Instead, we log a very clear error message to the console.
+// Check if all required environment variables are set
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN', 
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !import.meta.env[varName]);
+
+if (missingEnvVars.length > 0) {
   console.error(`
     *******************************************************************************
     * FIREBASE CONFIGURATION ERROR                                                *
     * --------------------------------------------------------------------------- *
-    * Please open 'firebase.ts' and replace the placeholder configuration         *
-    * with your actual Firebase project credentials.                              *
+    * Missing environment variables: ${missingEnvVars.join(', ')}
+    * 
+    * Please create a .env file in the project root with the following variables:
+    * VITE_FIREBASE_API_KEY=your_api_key_here
+    * VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+    * VITE_FIREBASE_PROJECT_ID=your_project_id_here
+    * VITE_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+    * VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
+    * VITE_FIREBASE_APP_ID=your_app_id_here
+    *
+    * You can find these values in Firebase Console > Project Settings > General
     * The application will not connect to Firebase until this is corrected.       *
     *******************************************************************************
   `);
 }
 
 // Initialize Firebase
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
-const db = firebase.firestore();
-const storage = firebase.storage();
+const db = getFirestore(app);
+const storage = getStorage(app);
 
 export { db, storage };
