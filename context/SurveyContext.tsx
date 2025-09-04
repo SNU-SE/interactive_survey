@@ -7,7 +7,7 @@ interface SurveyContextType {
   surveys: Survey[];
   loadingSurveys: boolean;
   getSurvey: (idOrCode: string) => Promise<Survey | undefined>;
-  addSurvey: (survey: Omit<Survey, 'id'>) => Promise<Survey>;
+  addSurvey: (survey: Omit<Survey, 'id' | 'code'>) => Promise<Survey>;
   updateSurvey: (survey: Survey) => Promise<void>;
   submissions: Submission[];
   loadingSubmissions: boolean;
