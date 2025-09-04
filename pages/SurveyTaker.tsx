@@ -20,16 +20,8 @@ const SurveyTaker: React.FC = () => {
         const surveyData = await getSurvey(id);
         if (surveyData) {
           setSurvey(surveyData);
-          // Set initial default answers for single choice questions
-          const initialAnswers = new Map();
-          surveyData.pages.forEach(page => {
-            page.questions.forEach(q => {
-              if (q.type === QuestionType.SINGLE_CHOICE && q.options.length > 0) {
-                initialAnswers.set(q.id, q.options[0].id);
-              }
-            });
-          });
-          setAnswers(initialAnswers);
+          // Start with no pre-selected answers
+          setAnswers(new Map());
         }
       }
       setLoading(false);

@@ -419,9 +419,6 @@ const SurveyEditor: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-lg sticky top-8">
             <div 
               ref={imageContainerRef} 
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
               onMouseLeave={() => setDraggingItem(null)} // Stop dragging if mouse leaves canvas
               className="relative select-none" 
               style={{ cursor: getCursor() }}
