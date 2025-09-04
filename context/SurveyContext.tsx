@@ -6,7 +6,7 @@ import { collection, addDoc, getDocs, doc, updateDoc, query, where } from 'fireb
 interface SurveyContextType {
   surveys: Survey[];
   loadingSurveys: boolean;
-  getSurvey: (id: string) => Promise<Survey | undefined>;
+  getSurvey: (idOrCode: string) => Promise<Survey | undefined>;
   addSurvey: (survey: Omit<Survey, 'id'>) => Promise<Survey>;
   updateSurvey: (survey: Survey) => Promise<void>;
   submissions: Submission[];
@@ -23,6 +23,17 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [loadingSurveys, setLoadingSurveys] = useState<boolean>(true);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState<boolean>(false);
+
+  // Helper: generate unique 3-digit-3-digit code
+  const generateUniqueCode = useCallback(async (): Promise<string> => {
+    const pad3 = (n: number) => n.toString().padStart(3, '0');
+    for (let i = 0; i < 50; i++) {
+      const code = `${pad3(Math.floor(Math.random() * 1000))}-${pad3(Math.floor(Math.random() * 1000))}`;
+      const snap = await getDocs(query(collection(db, 'surveys'), where('code', '==', code)));
+      if (snap.empty) return code;
+    }
+    throw new Error('코드 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+  }, []);
 
   // Load surveys from Firebase on mount
   useEffect(() => {
@@ -46,14 +57,30 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     loadSurveys();
   }, []);
 
-  const getSurvey = useCallback(async (id: string) => {
-    return surveys.find(s => s.id === id);
+  const getSurvey = useCallback(async (idOrCode: string) => {
+    const byId = surveys.find(s => s.id === idOrCode);
+    if (byId) return byId;
+    // If not found by id and looks like ###-###, try by code
+    if (/^\d{3}-\d{3}$/.test(idOrCode)) {
+      try {
+        const qSnap = await getDocs(query(collection(db, 'surveys'), where('code', '==', idOrCode)));
+        if (!qSnap.empty) {
+          const d = qSnap.docs[0];
+          return { id: d.id, ...(d.data() as Omit<Survey, 'id'>) } as Survey;
+        }
+      } catch (e) {
+        console.error('Failed to query survey by code', e);
+      }
+    }
+    return undefined;
   }, [surveys]);
 
-  const addSurvey = async (surveyData: Omit<Survey, 'id'>) => {
+  const addSurvey = async (surveyData: Omit<Survey, 'id' | 'code'>) => {
     try {
+      const code = await generateUniqueCode();
       const docRef = await addDoc(collection(db, 'surveys'), {
         ...surveyData,
+        code,
         submissionCount: 0,
         createdAt: new Date()
       });
@@ -61,6 +88,7 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const newSurvey: Survey = {
         ...surveyData,
         id: docRef.id,
+        code,
         submissionCount: 0,
       };
       

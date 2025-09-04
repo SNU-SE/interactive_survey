@@ -1,0 +1,23 @@
+{
+    "mcpServers": {
+        "context7": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@upstash/context7-mcp@latest"
+            ]
+
+        },
+        "firebase-mcp": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@gannonh/firebase-mcp"
+            ],
+            "env": {
+                "SERVICE_ACCOUNT_KEY_PATH": "/Users/science/survey-ed67b-firebase-adminsdk-fbsvc-7ad587dad5.json",
+                "FIREBASE_STORAGE_BUCKET": "survey-ed67b.firebasestorage.app"
+            }
+        }
+    }
+}

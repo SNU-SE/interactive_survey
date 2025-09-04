@@ -26,7 +26,7 @@ const TeacherDashboard: React.FC = () => {
                 <div>
                   <h3 className="font-semibold text-slate-800">{survey.title}</h3>
                   <p className="text-sm text-slate-500">
-                    Code: <span className="font-mono bg-slate-200 px-2 py-1 rounded">{survey.id}</span>
+                    Code: <span className="font-mono bg-slate-200 px-2 py-1 rounded">{survey.code || survey.id}</span>
                     <span className="ml-4">Pages: {survey.pages.length}</span>
                     <span className="ml-4">Submissions: {survey.submissionCount || 0}</span>
                   </p>

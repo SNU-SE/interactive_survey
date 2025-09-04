@@ -37,6 +37,7 @@ export interface Survey {
   id: string;
   title: string;
   pages: SurveyPage[];
+  code?: string; // short code like 123-456
   submissionCount?: number;
 }
 

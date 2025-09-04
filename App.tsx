@@ -13,7 +13,7 @@ import SurveyResults from './pages/SurveyResults';
 import AdminLogin from './pages/AdminLogin';
 
 const RequireTeacherAuth: React.FC<{ element: JSX.Element }> = ({ element }) => {
-  const authed = typeof window !== 'undefined' && localStorage.getItem('teacherAuth') === '1';
+  const authed = typeof window !== 'undefined' && sessionStorage.getItem('teacherAuth') === '1';
   return authed ? element : <Navigate to="/teacher-auth" replace />;
 };
 

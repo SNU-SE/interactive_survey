@@ -19,7 +19,7 @@ const AdminLogin: React.FC = () => {
     setLoading(true);
     setTimeout(() => {
       if (password.trim() === ADMIN_PASSWORD) {
-        localStorage.setItem('teacherAuth', '1');
+        sessionStorage.setItem('teacherAuth', '1');
         navigate('/teacher');
       } else {
         setError('비밀번호가 올바르지 않습니다.');
@@ -66,4 +66,3 @@ const AdminLogin: React.FC = () => {
 };
 
 export default AdminLogin;
-

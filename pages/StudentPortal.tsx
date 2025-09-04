@@ -19,9 +19,10 @@ const StudentPortal: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const survey = await getSurvey(code.trim());
+      const normalized = code.trim();
+      const survey = await getSurvey(normalized);
       if (survey) {
-        navigate(`/survey/${code.trim()}`);
+        navigate(`/survey/${survey.id}`);
       } else {
         setError('Survey not found. Please check the code and try again.');
       }
@@ -50,7 +51,7 @@ const StudentPortal: React.FC = () => {
                 setCode(e.target.value);
                 setError('');
               }}
-              placeholder="e.g., dOCiDWx... "
+              placeholder="e.g., 123-456"
               className="shadow appearance-none border rounded w-full py-3 px-4 text-slate-700 leading-tight focus:outline-none focus:shadow-outline focus:ring-2 focus:ring-blue-500"
             />
           </div>

@@ -219,7 +219,7 @@ const SurveyEditor: React.FC = () => {
         } else {
             for (const opt of q.options) {
                 const dist = Math.sqrt(Math.pow(clickXPercent - opt.x, 2) + Math.pow(clickYPercent - opt.y, 2));
-                if (dist < 2.5) { // Radius in percent, increased for easier grabbing
+                if (dist < 3.5) { // slightly larger radius for easier grabbing
                     setDraggingItem({ questionId: q.id, optionId: opt.id, startX: clickXPercent - opt.x, startY: clickYPercent - opt.y });
                     return;
                 }
@@ -311,14 +311,15 @@ const SurveyEditor: React.FC = () => {
       case QuestionType.SINGLE_CHOICE:
       case QuestionType.MULTIPLE_CHOICE:
         const isSingle = q.type === QuestionType.SINGLE_CHOICE;
-        const baseColor = isSingle ? 'red' : 'green';
         const shapeClass = isSingle ? 'rounded-full' : 'rounded-md';
+        const bgClass = isSingle ? 'bg-red-400' : 'bg-green-400';
+        const ringClass = isSingle ? 'ring-red-500' : 'ring-green-500';
 
         return (
           <React.Fragment key={q.id}>
             {q.options.map((opt, index) => (
               <div key={opt.id} style={{ left: `${opt.x}%`, top: `${opt.y}%`, position: 'absolute', transform: 'translate(-50%, -50%)', cursor: isMoveMode ? 'move' : 'default' }}>
-                <div className={`w-6 h-6 border-4 border-white bg-${baseColor}-400 ${shapeClass} shadow-lg ring-2 ring-${baseColor}-500 flex items-center justify-center`}>
+                <div className={`w-6 h-6 border-4 border-white ${bgClass} ${shapeClass} shadow-lg ring-2 ${ringClass} flex items-center justify-center`}>
                    <span className="text-xs font-bold text-white select-none" style={{ textShadow: '0 0 3px rgba(0,0,0,0.7)' }}>
                     {index + 1}
                    </span>
@@ -432,7 +433,12 @@ const SurveyEditor: React.FC = () => {
                         {survey.pages && survey.pages.length > 0 ? "Select a page to edit from the left." : "Upload image(s) to create pages and begin."}
                     </div>
                 )}
-                <div className="absolute inset-0">
+                <div 
+                  className="absolute inset-0"
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                >
                     {currentPage?.questions?.map(renderQuestion)}
                 </div>
             </div>
