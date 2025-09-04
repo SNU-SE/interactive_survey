@@ -5,29 +5,86 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      
+      with:
+        fetch-depth: 0
+        
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm'
         
     - name: Install dependencies
-      run: npm install
+      run: npm ci
       
-    - name: Build
+    - name: Build application
       run: npm run build
+      env:
+        NODE_ENV: production
+        VITE_NODE_ENV: production
+        
+    - name: Verify build output
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Build failed: dist directory not found"
+          exit 1
+        fi
+        if [ ! -f "dist/index.html" ]; then
+          echo "❌ Build failed: index.html not found"
+          exit 1
+        fi
+        echo "✅ Build verification passed"
+        ls -la dist/
       
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: github-pages
+        path: ./dist
+        retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: github-pages
+        path: ./dist
+        
     - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      if: github.ref == 'refs/heads/main'
+      id: deployment
+      uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./dist
+        force_orphan: true
+        user_name: 'github-actions[bot]'
+        user_email: '41898282+github-actions[bot]@users.noreply.github.com'
+        commit_message: ${{ github.event.head_commit.message }}
+        enable_jekyll: false
