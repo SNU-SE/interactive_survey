@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { Survey, Submission } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, writeBatch } from 'firebase/firestore';
 
 interface SurveyContextType {
   surveys: Survey[];
@@ -9,6 +9,7 @@ interface SurveyContextType {
   getSurvey: (idOrCode: string) => Promise<Survey | undefined>;
   addSurvey: (survey: Omit<Survey, 'id' | 'code'>) => Promise<Survey>;
   updateSurvey: (survey: Survey) => Promise<void>;
+  deleteSurvey: (surveyId: string) => Promise<void>;
   submissions: Submission[];
   loadingSubmissions: boolean;
   addSubmission: (submission: Omit<Submission, 'id'>) => Promise<void>;
@@ -195,6 +196,37 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   };
 
+  const deleteSurvey = async (surveyId: string) => {
+    try {
+      // Create a batch to delete survey and all related submissions
+      const batch = writeBatch(db);
+      
+      // Delete the survey document
+      const surveyRef = doc(db, 'surveys', surveyId);
+      batch.delete(surveyRef);
+      
+      // Find and delete all submissions for this survey
+      const submissionsQuery = query(collection(db, 'submissions'), where('surveyId', '==', surveyId));
+      const submissionsSnapshot = await getDocs(submissionsQuery);
+      
+      submissionsSnapshot.forEach((submissionDoc) => {
+        batch.delete(submissionDoc.ref);
+      });
+      
+      // Commit the batch
+      await batch.commit();
+      
+      // Update local state
+      setSurveys(prev => prev.filter(s => s.id !== surveyId));
+      
+      console.log(`Successfully deleted survey ${surveyId} and ${submissionsSnapshot.size} related submissions`);
+      
+    } catch (error) {
+      console.error('Error deleting survey from Firebase:', error);
+      throw new Error('설문 삭제에 실패했습니다. Firebase 연결을 확인해주세요.');
+    }
+  };
+
   const fetchSubmissionsForSurvey = useCallback(async (surveyId: string) => {
     setLoadingSubmissions(true);
     try {
@@ -215,7 +247,7 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
 
   return (
-    <SurveyContext.Provider value={{ surveys, loadingSurveys, getSurvey, addSurvey, updateSurvey, submissions, loadingSubmissions, addSubmission, fetchSubmissionsForSurvey }}>
+    <SurveyContext.Provider value={{ surveys, loadingSurveys, getSurvey, addSurvey, updateSurvey, deleteSurvey, submissions, loadingSubmissions, addSubmission, fetchSubmissionsForSurvey }}>
       {children}
     </SurveyContext.Provider>
   );

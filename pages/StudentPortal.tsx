@@ -10,6 +10,21 @@ const StudentPortal: React.FC = () => {
   const navigate = useNavigate();
   const { getSurvey } = useSurveys();
 
+  const formatCode = (value: string) => {
+    // Remove all non-numeric characters
+    const numbersOnly = value.replace(/\D/g, '');
+    
+    // Limit to 6 digits
+    const limited = numbersOnly.slice(0, 6);
+    
+    // Add dash after 3 digits if we have more than 3
+    if (limited.length > 3) {
+      return `${limited.slice(0, 3)}-${limited.slice(3)}`;
+    }
+    
+    return limited;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) {
@@ -48,7 +63,8 @@ const StudentPortal: React.FC = () => {
               type="text"
               value={code}
               onChange={(e) => {
-                setCode(e.target.value);
+                const formattedValue = formatCode(e.target.value);
+                setCode(formattedValue);
                 setError('');
               }}
               placeholder="e.g., 123-456"

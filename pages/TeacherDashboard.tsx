@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
-import { PlusCircleIcon, BarChartIcon } from '../components/icons';
+import { PlusCircleIcon, BarChartIcon, TrashIcon } from '../components/icons';
 
 const TeacherDashboard: React.FC = () => {
-  const { surveys, loadingSurveys } = useSurveys();
+  const { surveys, loadingSurveys, deleteSurvey } = useSurveys();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [surveyToDelete, setSurveyToDelete] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   return (
     <div className="container mx-auto p-8">
@@ -39,6 +42,16 @@ const TeacherDashboard: React.FC = () => {
                   <Link to={`/edit/${survey.id}`} className="px-4 py-2 text-sm bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300">
                     Edit
                   </Link>
+                  <button 
+                    onClick={() => {
+                      setSurveyToDelete({ id: survey.id, title: survey.title });
+                      setShowDeleteModal(true);
+                    }}
+                    className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                    title="Delete Survey"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
                 </div>
               </li>
             ))}
@@ -47,8 +60,76 @@ const TeacherDashboard: React.FC = () => {
           <p className="text-slate-500">You haven't created any surveys yet. Click "Create New Survey" to get started!</p>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && surveyToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">설문지 삭제</h3>
+            <p className="text-slate-600 mb-6">
+              <span className="font-semibold">"{surveyToDelete.title}"</span> 설문지를 정말 삭제하시겠습니까?
+              <br /><br />
+              <span className="text-red-600 font-medium">이 작업은 되돌릴 수 없으며, 모든 응답 데이터도 함께 삭제됩니다.</span>
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSurveyToDelete(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 text-slate-600 bg-slate-200 rounded-md hover:bg-slate-300 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  setIsDeleting(true);
+                  try {
+                    await deleteSurvey(surveyToDelete.id);
+                    setShowDeleteModal(false);
+                    setSurveyToDelete(null);
+                  } catch (error) {
+                    console.error('Delete error:', error);
+                    alert('설문 삭제 중 오류가 발생했습니다.');
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    삭제 중...
+                  </>
+                ) : (
+                  '삭제'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+  const handleDeleteSurvey = async () => {
+    if (!surveyToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteSurvey(surveyToDelete.id);
+      setShowDeleteModal(false);
+      setSurveyToDelete(null);
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('설문 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
 export default TeacherDashboard;
