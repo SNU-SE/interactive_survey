@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
-import { Survey, Question, QuestionType, Answer } from '../types';
+import { Survey, Question, QuestionType, Answer, AudioButton } from '../types';
 import AudioPlayer from '../components/AudioPlayer';
 
 const SurveyTaker: React.FC = () => {
@@ -13,6 +13,7 @@ const SurveyTaker: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState<Map<string, string | string[]>>(new Map());
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const [currentPlayingAudio, setCurrentPlayingAudio] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSurvey = async () => {
@@ -128,6 +129,65 @@ const SurveyTaker: React.FC = () => {
     }
   };
 
+  const renderAudioButtonForTaker = (audioButton: AudioButton) => {
+    const isPlaying = currentPlayingAudio === audioButton.id;
+    
+    const handleAudioPlay = () => {
+      // Stop any currently playing audio
+      const audioElements = document.querySelectorAll('audio');
+      audioElements.forEach(audio => {
+        if (!audio.paused) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      });
+      
+      // Create new audio element
+      const audio = new Audio(audioButton.audioUrl);
+      audio.onplay = () => setCurrentPlayingAudio(audioButton.id);
+      audio.onended = () => setCurrentPlayingAudio(null);
+      audio.onpause = () => setCurrentPlayingAudio(null);
+      
+      audio.play().catch(console.error);
+    };
+
+    return (
+      <div 
+        key={audioButton.id} 
+        style={{ 
+          left: `${audioButton.x}%`, 
+          top: `${audioButton.y}%`, 
+          position: 'absolute', 
+          transform: 'translate(-50%, -50%)',
+          zIndex: 10
+        }}
+      >
+        <button 
+          onClick={handleAudioPlay}
+          className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg border-2 border-white transition-all hover:scale-110 ${
+            isPlaying 
+              ? 'bg-green-500 animate-pulse' 
+              : 'bg-purple-500 hover:bg-purple-600'
+          }`}
+          title={audioButton.label || 'Play audio'}
+        >
+          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+            {isPlaying ? (
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/> // Pause icon
+            ) : (
+              <path d="M8 5v14l11-7z"/> // Play icon
+            )}
+          </svg>
+        </button>
+        {audioButton.label && !isPlaying && (
+          <div className="absolute top-full mt-1 px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded whitespace-nowrap pointer-events-none">
+            {audioButton.label}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto p-8">
         <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
@@ -144,6 +204,7 @@ const SurveyTaker: React.FC = () => {
       <div className="relative w-full max-w-4xl mx-auto bg-white p-2 rounded-lg shadow-lg">
         <img src={currentPage.backgroundImage} alt={`Survey background page ${currentPageIndex + 1}`} className="w-full h-auto rounded-md" />
         {currentPage.questions.map(renderQuestionForTaker)}
+        {currentPage.audioButtons?.map(renderAudioButtonForTaker)}
       </div>
       <div className="flex justify-between items-center mt-8 max-w-4xl mx-auto">
         <button 

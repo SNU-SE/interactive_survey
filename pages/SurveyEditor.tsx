@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
-import { Survey, Question, QuestionType, ChoiceOption, ShortAnswerQuestion, ChoiceQuestion, SurveyPage } from '../types';
-import { CheckCircleIcon, ListChecksIcon, TextInputIcon, TrashIcon, MoveIcon } from '../components/icons';
+import { Survey, Question, QuestionType, ChoiceOption, ShortAnswerQuestion, ChoiceQuestion, SurveyPage, AudioButton } from '../types';
+import { CheckCircleIcon, ListChecksIcon, TextInputIcon, TrashIcon, MoveIcon, AudioIcon } from '../components/icons';
 import AudioPlayer from '../components/AudioPlayer';
 
-type Tool = QuestionType | 'DELETE' | 'MOVE' | 'NONE';
+type Tool = QuestionType | 'DELETE' | 'MOVE' | 'AUDIO_BUTTON' | 'NONE';
 
 interface DraggingItem {
-  questionId: string;
+  questionId?: string;
   optionId?: string;
+  audioButtonId?: string;
   startX: number; // Percentage offset within the element
   startY: number; // Percentage offset within the element
 }
@@ -29,13 +30,38 @@ const SurveyEditor: React.FC = () => {
   
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
+  // Migration helper function
+  const migrateAudioUrl = (page: SurveyPage): SurveyPage => {
+    if (page.audioUrl && (!page.audioButtons || page.audioButtons.length === 0)) {
+      return {
+        ...page,
+        audioButtons: [{
+          id: `audio_${Date.now()}`,
+          x: 50, // Center position
+          y: 10, // Top position
+          audioUrl: page.audioUrl,
+          label: 'Play Audio'
+        }]
+      };
+    }
+    return {
+      ...page,
+      audioButtons: page.audioButtons || []
+    };
+  };
+
   useEffect(() => {
     const loadSurvey = async () => {
       if (id && id !== 'new') {
         setIsLoading(true);
         const existingSurvey = await getSurvey(id);
         if (existingSurvey) {
-          setSurvey(existingSurvey);
+          // Migrate existing audioUrl to audioButtons
+          const migratedSurvey = {
+            ...existingSurvey,
+            pages: existingSurvey.pages?.map(migrateAudioUrl) || []
+          };
+          setSurvey(migratedSurvey);
         }
         setIsLoading(false);
       } else {
@@ -68,6 +94,7 @@ const SurveyEditor: React.FC = () => {
       const newPages: SurveyPage[] = base64Images.map(imgData => ({
         id: `p${Date.now()}${Math.random()}`,
         backgroundImage: imgData,
+        audioButtons: [],
         questions: [],
       }));
 
@@ -159,6 +186,11 @@ const SurveyEditor: React.FC = () => {
     const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
     const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
 
+    if (currentTool === 'AUDIO_BUTTON') {
+        promptForAudioFile(xPercent, yPercent);
+        return;
+    }
+
     setSurvey(s => {
         const newPages = [...(s.pages || [])];
         const currentPage = { ...newPages[currentPageIndex] };
@@ -192,6 +224,68 @@ const SurveyEditor: React.FC = () => {
             setIsEditingQuestion(true);
         }
     }
+  };
+
+  const promptForAudioFile = (x: number, y: number) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        handleAudioButtonUpload(file, x, y);
+      }
+    };
+    input.click();
+  };
+
+  const handleAudioButtonUpload = async (file: File, x: number, y: number) => {
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Audio file is too large. Please select a file smaller than 10MB.');
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const audioUrl = reader.result as string;
+        const newAudioButton: AudioButton = {
+          id: `audio_${Date.now()}`,
+          x,
+          y,
+          audioUrl,
+          label: file.name.replace(/\.[^/.]+$/, "") // Remove file extension
+        };
+
+        setSurvey(s => {
+          const newPages = [...(s.pages || [])];
+          const currentPage = { ...newPages[currentPageIndex] };
+          newPages[currentPageIndex] = {
+            ...currentPage,
+            audioButtons: [...(currentPage.audioButtons || []), newAudioButton]
+          };
+          return { ...s, pages: newPages };
+        });
+
+        setCurrentTool('NONE');
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Audio upload failed:', error);
+      alert('Failed to upload audio file. Please try again.');
+    }
+  };
+
+  const handleDeleteAudioButton = (audioButtonId: string) => {
+    setSurvey(s => {
+      const newPages = [...(s.pages || [])];
+      const currentPage = { ...newPages[currentPageIndex] };
+      newPages[currentPageIndex] = {
+        ...currentPage,
+        audioButtons: currentPage.audioButtons?.filter(ab => ab.id !== audioButtonId) || []
+      };
+      return { ...s, pages: newPages };
+    });
   };
 
   const handleDeleteQuestion = (questionId: string) => {
@@ -396,6 +490,45 @@ const SurveyEditor: React.FC = () => {
     }
   };
 
+  const renderAudioButton = (audioButton: AudioButton) => {
+    const isDeleteMode = currentTool === 'DELETE';
+    const isMoveMode = currentTool === 'MOVE';
+    
+    return (
+      <div 
+        key={audioButton.id} 
+        style={{ 
+          left: `${audioButton.x}%`, 
+          top: `${audioButton.y}%`, 
+          position: 'absolute', 
+          transform: 'translate(-50%, -50%)',
+          cursor: isMoveMode ? 'move' : 'default' 
+        }}
+      >
+        <div className="relative flex items-center justify-center">
+          <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-purple-600 transition-colors">
+            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+          </div>
+          {audioButton.label && (
+            <div className="absolute top-full mt-1 px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded whitespace-nowrap">
+              {audioButton.label}
+            </div>
+          )}
+        </div>
+        {isDeleteMode && (
+          <div 
+            onClick={() => handleDeleteAudioButton(audioButton.id)} 
+            className="absolute -inset-2 bg-red-500 bg-opacity-50 flex items-center justify-center cursor-pointer rounded-full group"
+          >
+            <TrashIcon className="h-5 w-5 text-white opacity-75 group-hover:opacity-100 group-hover:scale-110 transition-all"/>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const currentPage = survey.pages?.[currentPageIndex];
 
   if (isLoading) {
@@ -489,6 +622,7 @@ const SurveyEditor: React.FC = () => {
                       <ToolButton icon={<TextInputIcon/>} text="Add Short Answer" onClick={() => setCurrentTool(QuestionType.SHORT_ANSWER)} active={currentTool === QuestionType.SHORT_ANSWER}/>
                       <ToolButton icon={<CheckCircleIcon/>} text="Add Single Choice" onClick={() => setCurrentTool(QuestionType.SINGLE_CHOICE)} active={currentTool === QuestionType.SINGLE_CHOICE}/>
                       <ToolButton icon={<ListChecksIcon/>} text="Add Multiple Choice" onClick={() => setCurrentTool(QuestionType.MULTIPLE_CHOICE)} active={currentTool === QuestionType.MULTIPLE_CHOICE}/>
+                      <ToolButton icon={<AudioIcon/>} text="Add Audio Button" onClick={() => setCurrentTool('AUDIO_BUTTON')} active={currentTool === 'AUDIO_BUTTON'}/>
                       <ToolButton icon={<MoveIcon/>} text="Move Tool" onClick={() => setCurrentTool('MOVE')} active={currentTool === 'MOVE'}/>
                       <ToolButton icon={<TrashIcon/>} text="Delete Tool" onClick={() => setCurrentTool('DELETE')} active={currentTool === 'DELETE'} isDelete/>
                   </div>
@@ -526,6 +660,7 @@ const SurveyEditor: React.FC = () => {
                   onMouseUp={handleCanvasMouseUp}
                 >
                     {currentPage?.questions?.map(renderQuestion)}
+                    {currentPage?.audioButtons?.map(renderAudioButton)}
                 </div>
             </div>
         </div>

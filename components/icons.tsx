@@ -54,3 +54,9 @@ export const MoveIcon = () => (
         <path d="M12 3v18"></path>
     </svg>
 );
+
+export const AudioIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M9 12a3 3 0 106 0v5a3 3 0 01-6 0v-5zM6 8h.01M6 16h.01" />
+    </svg>
+);

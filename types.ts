@@ -4,6 +4,14 @@ export enum QuestionType {
   SINGLE_CHOICE = 'SINGLE_CHOICE',
 }
 
+export interface AudioButton {
+  id: string;
+  x: number; // position as percentage
+  y: number; // position as percentage
+  audioUrl: string;
+  label?: string; // optional button label
+}
+
 export interface ChoiceOption {
   id: string;
   x: number; // position as percentage
@@ -30,8 +38,10 @@ export type Question = ShortAnswerQuestion | ChoiceQuestion;
 export interface SurveyPage {
   id: string;
   backgroundImage: string; // URL for the image in Firebase Storage
-  audioUrl?: string; // URL for the audio file in Firebase Storage
+  audioButtons: AudioButton[]; // Audio buttons positioned on the page
   questions: Question[];
+  // Legacy field for backward compatibility
+  audioUrl?: string; // URL for the audio file in Firebase Storage (deprecated)
 }
 
 export interface Survey {
