@@ -4,6 +4,7 @@ import { useSurveys } from '../context/SurveyContext';
 import { Survey, Question, QuestionType, ChoiceOption, ShortAnswerQuestion, ChoiceQuestion, SurveyPage, AudioButton, AudioFile } from '../types';
 import { CheckCircleIcon, ListChecksIcon, TextInputIcon, TrashIcon, MoveIcon } from '../components/icons';
 import AudioPlayer from '../components/AudioPlayer';
+import MiniAudioPlayer from '../components/MiniAudioPlayer';
 
 type Tool = QuestionType | 'DELETE' | 'MOVE' | 'AUDIO_BUTTON' | 'NONE';
 
@@ -373,6 +374,21 @@ const SurveyEditor: React.FC = () => {
     const clickXPercent = ((e.clientX - rect.left) / rect.width) * 100;
     const clickYPercent = ((e.clientY - rect.top) / rect.height) * 100;
     
+    // Check audio buttons first (they might overlap with other elements)
+    if (currentPage.audioButtons) {
+      for (const audioButton of [...currentPage.audioButtons].reverse()) {
+        // Audio buttons have a larger hit area (MiniAudioPlayer is about 192px width ~ 12% of typical canvas)
+        const audioButtonWidth = 12; // approximate percentage width
+        const audioButtonHeight = 6; // approximate percentage height
+        
+        if (clickXPercent >= audioButton.x - audioButtonWidth/2 && clickXPercent <= audioButton.x + audioButtonWidth/2 &&
+            clickYPercent >= audioButton.y - audioButtonHeight/2 && clickYPercent <= audioButton.y + audioButtonHeight/2) {
+          setDraggingItem({ audioButtonId: audioButton.id, startX: clickXPercent - audioButton.x, startY: clickYPercent - audioButton.y });
+          return;
+        }
+      }
+    }
+    
     for (const q of [...currentPage.questions].reverse()) {
         if (q.type === QuestionType.SHORT_ANSWER) {
             if (clickXPercent >= q.x && clickXPercent <= q.x + q.width &&
@@ -405,6 +421,21 @@ const SurveyEditor: React.FC = () => {
       const newPages = s.pages.map((page, pageIndex) => {
         if (pageIndex !== currentPageIndex) {
           return page;
+        }
+
+        // Handle audio button dragging
+        if (draggingItem.audioButtonId) {
+          const updatedAudioButtons = (page.audioButtons || []).map(audioButton => {
+            if (audioButton.id !== draggingItem.audioButtonId) {
+              return audioButton;
+            }
+            return {
+              ...audioButton,
+              x: Math.max(0, Math.min(100, newXPercent - draggingItem.startX)),
+              y: Math.max(0, Math.min(100, newYPercent - draggingItem.startY)),
+            };
+          });
+          return { ...page, audioButtons: updatedAudioButtons };
         }
 
         const updatedQuestions = page.questions.map(q => {
@@ -506,6 +537,47 @@ const SurveyEditor: React.FC = () => {
     const isDeleteMode = currentTool === 'DELETE';
     const isMoveMode = currentTool === 'MOVE';
     
+    // Get the audio file from the global pool
+    const audioFile = survey.audioFiles?.find(af => af.id === audioButton.audioFileId);
+    if (!audioFile) {
+      // Fallback for legacy data
+      if (audioButton.audioUrl) {
+        const audioButtonNumber = survey.pages?.[currentPageIndex]?.audioButtons?.findIndex(ab => ab.id === audioButton.id) + 1 || 1;
+        return (
+          <div 
+            key={audioButton.id} 
+            style={{ 
+              left: `${audioButton.x}%`, 
+              top: `${audioButton.y}%`, 
+              position: 'absolute', 
+              transform: 'translate(-50%, -50%)',
+              cursor: isMoveMode ? 'move' : 'default' 
+            }}
+          >
+            <div className="relative">
+              <MiniAudioPlayer 
+                audioUrl={audioButton.audioUrl}
+                label={`${audioButtonNumber}`}
+                disabled={true}
+              />
+              {isDeleteMode && (
+                <div 
+                  onClick={() => handleDeleteAudioButton(audioButton.id)} 
+                  className="absolute inset-0 bg-red-500 bg-opacity-50 flex items-center justify-center cursor-pointer rounded-lg group"
+                >
+                  <TrashIcon className="h-5 w-5 text-white opacity-75 group-hover:opacity-100 group-hover:scale-110 transition-all"/>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      return null;
+    }
+
+    // Get the audio button number based on its position in the survey's audioFiles array
+    const audioButtonNumber = survey.audioFiles.findIndex(af => af.id === audioButton.audioFileId) + 1;
+    
     return (
       <div 
         key={audioButton.id} 
@@ -517,26 +589,21 @@ const SurveyEditor: React.FC = () => {
           cursor: isMoveMode ? 'move' : 'default' 
         }}
       >
-        <div className="relative flex items-center justify-center">
-          <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-purple-600 transition-colors">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-            </svg>
-          </div>
-          {audioButton.label && (
-            <div className="absolute top-full mt-1 px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded whitespace-nowrap">
-              {audioButton.label}
+        <div className="relative">
+          <MiniAudioPlayer 
+            audioUrl={audioFile.audioUrl}
+            label={`${audioButtonNumber}`}
+            disabled={true}
+          />
+          {isDeleteMode && (
+            <div 
+              onClick={() => handleDeleteAudioButton(audioButton.id)} 
+              className="absolute inset-0 bg-red-500 bg-opacity-50 flex items-center justify-center cursor-pointer rounded-lg group"
+            >
+              <TrashIcon className="h-5 w-5 text-white opacity-75 group-hover:opacity-100 group-hover:scale-110 transition-all"/>
             </div>
           )}
         </div>
-        {isDeleteMode && (
-          <div 
-            onClick={() => handleDeleteAudioButton(audioButton.id)} 
-            className="absolute -inset-2 bg-red-500 bg-opacity-50 flex items-center justify-center cursor-pointer rounded-full group"
-          >
-            <TrashIcon className="h-5 w-5 text-white opacity-75 group-hover:opacity-100 group-hover:scale-110 transition-all"/>
-          </div>
-        )}
       </div>
     );
   };

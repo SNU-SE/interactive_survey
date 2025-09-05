@@ -3,9 +3,10 @@ import React, { useState, useRef, useEffect } from 'react';
 interface MiniAudioPlayerProps {
   audioUrl: string;
   label?: string;
+  disabled?: boolean; // For editor mode - disables audio playback
 }
 
-const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ audioUrl, label }) => {
+const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ audioUrl, label, disabled = false }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -13,6 +14,13 @@ const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ audioUrl, label }) =>
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    if (disabled) {
+      // In disabled mode, just set some default values
+      setDuration(120); // Default 2 minutes for display
+      setIsLoading(false);
+      return;
+    }
+
     const audio = new Audio(audioUrl);
     audioRef.current = audio;
 
@@ -46,9 +54,11 @@ const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ audioUrl, label }) =>
       audio.removeEventListener('loadstart', handleLoadStart);
       audio.pause();
     };
-  }, [audioUrl]);
+  }, [audioUrl, disabled]);
 
   const togglePlayPause = () => {
+    if (disabled) return; // Don't allow playback in editor mode
+    
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -70,6 +80,8 @@ const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ audioUrl, label }) =>
   };
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled) return; // Don't allow scrubbing in editor mode
+    
     const audio = audioRef.current;
     if (!audio || !duration) return;
 
@@ -95,9 +107,9 @@ const MiniAudioPlayer: React.FC<MiniAudioPlayerProps> = ({ audioUrl, label }) =>
       <div className="flex items-center space-x-3">
         <button
           onClick={togglePlayPause}
-          disabled={isLoading}
+          disabled={isLoading || disabled}
           className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm transition-all ${
-            isLoading 
+            isLoading || disabled
               ? 'bg-gray-400 cursor-not-allowed'
               : isPlaying 
                 ? 'bg-red-500 hover:bg-red-600' 
