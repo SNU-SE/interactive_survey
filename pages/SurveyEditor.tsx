@@ -27,6 +27,7 @@ const SurveyEditor: React.FC = () => {
   const [draggingItem, setDraggingItem] = useState<DraggingItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingAudioFile, setPendingAudioFile] = useState<File | null>(null);
   
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -110,62 +111,6 @@ const SurveyEditor: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const file = files[0];
-    if (!file.type.startsWith('audio/')) {
-      alert('Please select an audio file.');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      alert('Audio file is too large. Please select a file smaller than 10MB.');
-      return;
-    }
-
-    if (!survey.pages || currentPageIndex >= survey.pages.length) {
-      alert('Please select a page first.');
-      return;
-    }
-
-    try {
-      // Create a FileReader to convert file to data URL for temporary storage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const audioUrl = reader.result as string;
-        
-        setSurvey(s => {
-          const newPages = [...(s.pages || [])];
-          newPages[currentPageIndex] = {
-            ...newPages[currentPageIndex],
-            audioUrl
-          };
-          return { ...s, pages: newPages };
-        });
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Audio upload failed:', error);
-      alert('Failed to upload audio file. Please try again.');
-    }
-
-    e.target.value = '';
-  };
-
-  const removeAudio = () => {
-    if (!survey.pages || currentPageIndex >= survey.pages.length) return;
-    
-    setSurvey(s => {
-      const newPages = [...(s.pages || [])];
-      newPages[currentPageIndex] = {
-        ...newPages[currentPageIndex],
-        audioUrl: undefined
-      };
-      return { ...s, pages: newPages };
-    });
-  };
 
   const deletePage = (indexToDelete: number) => {
     setSurvey(s => {
@@ -187,7 +132,9 @@ const SurveyEditor: React.FC = () => {
     const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
 
     if (currentTool === 'AUDIO_BUTTON') {
-        promptForAudioFile(xPercent, yPercent);
+        if (pendingAudioFile) {
+          handleAudioButtonUpload(pendingAudioFile, xPercent, yPercent);
+        }
         return;
     }
 
@@ -226,25 +173,7 @@ const SurveyEditor: React.FC = () => {
     }
   };
 
-  const promptForAudioFile = (x: number, y: number) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'audio/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        handleAudioButtonUpload(file, x, y);
-      }
-    };
-    input.click();
-  };
-
   const handleAudioButtonUpload = async (file: File, x: number, y: number) => {
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Audio file is too large. Please select a file smaller than 10MB.');
-      return;
-    }
-
     try {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -268,11 +197,14 @@ const SurveyEditor: React.FC = () => {
         });
 
         setCurrentTool('NONE');
+        setPendingAudioFile(null);
       };
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('Audio upload failed:', error);
       alert('Failed to upload audio file. Please try again.');
+      setPendingAudioFile(null);
+      setCurrentTool('NONE');
     }
   };
 
@@ -286,6 +218,31 @@ const SurveyEditor: React.FC = () => {
       };
       return { ...s, pages: newPages };
     });
+  };
+
+  const handleAddAudioButtonClick = () => {
+    if (!survey.pages || currentPageIndex >= survey.pages.length) {
+      alert('Please select a page first.');
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        if (file.size > 10 * 1024 * 1024) {
+          alert('Audio file is too large. Please select a file smaller than 10MB.');
+          return;
+        }
+        
+        setPendingAudioFile(file);
+        setCurrentTool('AUDIO_BUTTON');
+        alert('Audio file selected! Now click on the image where you want to place the audio button.');
+      }
+    };
+    input.click();
   };
 
   const handleDeleteQuestion = (questionId: string) => {
@@ -578,34 +535,46 @@ const SurveyEditor: React.FC = () => {
           </div>
           <hr/>
           <div>
-            <h2 className="text-xl font-bold mb-4">Audio</h2>
-            {currentPage?.audioUrl ? (
-              <div className="space-y-3">
-                <AudioPlayer audioUrl={currentPage.audioUrl} className="w-full" />
-                <button
-                  onClick={removeAudio}
-                  className="w-full px-4 py-2 bg-red-500 text-white font-medium rounded-md hover:bg-red-600"
-                >
-                  Remove Audio
-                </button>
+            <h2 className="text-xl font-bold mb-4">Audio Buttons</h2>
+            {currentPage && currentPage.audioButtons && currentPage.audioButtons.length > 0 ? (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                {currentPage.audioButtons.map((audioButton, index) => (
+                  <div key={audioButton.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
+                    <div className="flex items-center flex-1 min-w-0">
+                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium truncate">
+                        {audioButton.label || `Audio ${index + 1}`}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteAudioButton(audioButton.id)}
+                      className="p-1 text-red-500 hover:bg-red-100 rounded"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div>
-                <label htmlFor="audio-upload" className="w-full text-center cursor-pointer px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300 block">
-                  Upload Audio File
-                </label>
-                <input
-                  id="audio-upload"
-                  type="file"
-                  accept="audio/*"
-                  onChange={handleAudioUpload}
-                  className="hidden"
-                />
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Supported: MP3, WAV, M4A (Max: 10MB)
-                </p>
-              </div>
+              <p className="text-sm text-slate-500 text-center py-4">No audio buttons on this page</p>
             )}
+            
+            <div className="mt-4">
+              <button
+                onClick={handleAddAudioButtonClick}
+                className="w-full px-4 py-2 bg-purple-500 text-white font-medium rounded-md hover:bg-purple-600 flex items-center justify-center"
+              >
+                <AudioIcon />
+                Add Audio Button
+              </button>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Click button, select audio file, then click on image to place
+              </p>
+            </div>
           </div>
           <hr/>
           <div>
