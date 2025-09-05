@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
 import { Survey, Question, QuestionType, ChoiceOption, ShortAnswerQuestion, ChoiceQuestion, SurveyPage } from '../types';
 import { CheckCircleIcon, ListChecksIcon, TextInputIcon, TrashIcon, MoveIcon } from '../components/icons';
+import AudioPlayer from '../components/AudioPlayer';
 
 type Tool = QuestionType | 'DELETE' | 'MOVE' | 'NONE';
 
@@ -80,6 +81,63 @@ const SurveyEditor: React.FC = () => {
     });
 
     e.target.value = '';
+  };
+
+  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (!file.type.startsWith('audio/')) {
+      alert('Please select an audio file.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      alert('Audio file is too large. Please select a file smaller than 10MB.');
+      return;
+    }
+
+    if (!survey.pages || currentPageIndex >= survey.pages.length) {
+      alert('Please select a page first.');
+      return;
+    }
+
+    try {
+      // Create a FileReader to convert file to data URL for temporary storage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const audioUrl = reader.result as string;
+        
+        setSurvey(s => {
+          const newPages = [...(s.pages || [])];
+          newPages[currentPageIndex] = {
+            ...newPages[currentPageIndex],
+            audioUrl
+          };
+          return { ...s, pages: newPages };
+        });
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Audio upload failed:', error);
+      alert('Failed to upload audio file. Please try again.');
+    }
+
+    e.target.value = '';
+  };
+
+  const removeAudio = () => {
+    if (!survey.pages || currentPageIndex >= survey.pages.length) return;
+    
+    setSurvey(s => {
+      const newPages = [...(s.pages || [])];
+      newPages[currentPageIndex] = {
+        ...newPages[currentPageIndex],
+        audioUrl: undefined
+      };
+      return { ...s, pages: newPages };
+    });
   };
 
   const deletePage = (indexToDelete: number) => {
@@ -384,6 +442,37 @@ const SurveyEditor: React.FC = () => {
                 </label>
                 <input id="image-upload" type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden"/>
             </div>
+          </div>
+          <hr/>
+          <div>
+            <h2 className="text-xl font-bold mb-4">Audio</h2>
+            {currentPage?.audioUrl ? (
+              <div className="space-y-3">
+                <AudioPlayer audioUrl={currentPage.audioUrl} className="w-full" />
+                <button
+                  onClick={removeAudio}
+                  className="w-full px-4 py-2 bg-red-500 text-white font-medium rounded-md hover:bg-red-600"
+                >
+                  Remove Audio
+                </button>
+              </div>
+            ) : (
+              <div>
+                <label htmlFor="audio-upload" className="w-full text-center cursor-pointer px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-md hover:bg-slate-300 block">
+                  Upload Audio File
+                </label>
+                <input
+                  id="audio-upload"
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioUpload}
+                  className="hidden"
+                />
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Supported: MP3, WAV, M4A (Max: 10MB)
+                </p>
+              </div>
+            )}
           </div>
           <hr/>
           <div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
 import { Survey, Question, QuestionType, Answer } from '../types';
+import AudioPlayer from '../components/AudioPlayer';
 
 const SurveyTaker: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -133,6 +134,13 @@ const SurveyTaker: React.FC = () => {
             <h1 className="text-3xl font-bold text-slate-800">{survey.title}</h1>
             <p className="text-slate-600">Click or type on the image to answer the questions.</p>
         </div>
+      
+      {currentPage.audioUrl && (
+        <div className="max-w-4xl mx-auto mb-4">
+          <AudioPlayer audioUrl={currentPage.audioUrl} className="w-full" />
+        </div>
+      )}
+      
       <div className="relative w-full max-w-4xl mx-auto bg-white p-2 rounded-lg shadow-lg">
         <img src={currentPage.backgroundImage} alt={`Survey background page ${currentPageIndex + 1}`} className="w-full h-auto rounded-md" />
         {currentPage.questions.map(renderQuestionForTaker)}
