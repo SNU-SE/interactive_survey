@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
 import { Survey, Question, QuestionType, Answer, AudioButton } from '../types';
 import AudioPlayer from '../components/AudioPlayer';
+import MiniAudioPlayer from '../components/MiniAudioPlayer';
 
 const SurveyTaker: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -130,27 +131,35 @@ const SurveyTaker: React.FC = () => {
   };
 
   const renderAudioButtonForTaker = (audioButton: AudioButton) => {
-    const isPlaying = currentPlayingAudio === audioButton.id;
-    
-    const handleAudioPlay = () => {
-      // Stop any currently playing audio
-      const audioElements = document.querySelectorAll('audio');
-      audioElements.forEach(audio => {
-        if (!audio.paused) {
-          audio.pause();
-          audio.currentTime = 0;
-        }
-      });
-      
-      // Create new audio element
-      const audio = new Audio(audioButton.audioUrl);
-      audio.onplay = () => setCurrentPlayingAudio(audioButton.id);
-      audio.onended = () => setCurrentPlayingAudio(null);
-      audio.onpause = () => setCurrentPlayingAudio(null);
-      
-      audio.play().catch(console.error);
-    };
+    // Get the audio file from the global pool
+    const audioFile = survey?.audioFiles.find(af => af.id === audioButton.audioFileId);
+    if (!audioFile) {
+      // Fallback for legacy data
+      if (audioButton.audioUrl) {
+        return (
+          <div 
+            key={audioButton.id} 
+            style={{ 
+              left: `${audioButton.x}%`, 
+              top: `${audioButton.y}%`, 
+              position: 'absolute', 
+              transform: 'translate(-50%, -50%)',
+              zIndex: 10
+            }}
+          >
+            <MiniAudioPlayer 
+              audioUrl={audioButton.audioUrl}
+              label={audioButton.label}
+            />
+          </div>
+        );
+      }
+      return null;
+    }
 
+    // Get the audio button number based on its position in the survey's audioFiles array
+    const audioButtonNumber = survey.audioFiles.findIndex(af => af.id === audioButton.audioFileId) + 1;
+    
     return (
       <div 
         key={audioButton.id} 
@@ -162,28 +171,10 @@ const SurveyTaker: React.FC = () => {
           zIndex: 10
         }}
       >
-        <button 
-          onClick={handleAudioPlay}
-          className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg border-2 border-white transition-all hover:scale-110 ${
-            isPlaying 
-              ? 'bg-green-500 animate-pulse' 
-              : 'bg-purple-500 hover:bg-purple-600'
-          }`}
-          title={audioButton.label || 'Play audio'}
-        >
-          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            {isPlaying ? (
-              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/> // Pause icon
-            ) : (
-              <path d="M8 5v14l11-7z"/> // Play icon
-            )}
-          </svg>
-        </button>
-        {audioButton.label && !isPlaying && (
-          <div className="absolute top-full mt-1 px-2 py-1 bg-black bg-opacity-75 text-white text-xs rounded whitespace-nowrap pointer-events-none">
-            {audioButton.label}
-          </div>
-        )}
+        <MiniAudioPlayer 
+          audioUrl={audioFile.audioUrl}
+          label={`${audioButtonNumber}. ${audioFile.name}`}
+        />
       </div>
     );
   };

@@ -4,11 +4,18 @@ export enum QuestionType {
   SINGLE_CHOICE = 'SINGLE_CHOICE',
 }
 
+export interface AudioFile {
+  id: string;
+  name: string;
+  audioUrl: string;
+  duration?: number; // audio duration in seconds
+}
+
 export interface AudioButton {
   id: string;
   x: number; // position as percentage
   y: number; // position as percentage
-  audioUrl: string;
+  audioFileId: string; // reference to AudioFile
   label?: string; // optional button label
 }
 
@@ -48,6 +55,7 @@ export interface Survey {
   id: string;
   title: string;
   pages: SurveyPage[];
+  audioFiles: AudioFile[]; // global audio files pool
   code?: string; // short code like 123-456
   submissionCount?: number;
 }

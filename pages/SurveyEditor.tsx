@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSurveys } from '../context/SurveyContext';
-import { Survey, Question, QuestionType, ChoiceOption, ShortAnswerQuestion, ChoiceQuestion, SurveyPage, AudioButton } from '../types';
-import { CheckCircleIcon, ListChecksIcon, TextInputIcon, TrashIcon, MoveIcon, AudioIcon } from '../components/icons';
+import { Survey, Question, QuestionType, ChoiceOption, ShortAnswerQuestion, ChoiceQuestion, SurveyPage, AudioButton, AudioFile } from '../types';
+import { CheckCircleIcon, ListChecksIcon, TextInputIcon, TrashIcon, MoveIcon } from '../components/icons';
 import AudioPlayer from '../components/AudioPlayer';
 
 type Tool = QuestionType | 'DELETE' | 'MOVE' | 'AUDIO_BUTTON' | 'NONE';
@@ -20,14 +20,14 @@ const SurveyEditor: React.FC = () => {
   const navigate = useNavigate();
   const { getSurvey, addSurvey, updateSurvey } = useSurveys();
 
-  const [survey, setSurvey] = useState<Partial<Survey>>({ title: '', pages: [] });
+  const [survey, setSurvey] = useState<Partial<Survey>>({ title: '', pages: [], audioFiles: [] });
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [currentTool, setCurrentTool] = useState<Tool>('NONE');
   const [isEditingQuestion, setIsEditingQuestion] = useState(false);
   const [draggingItem, setDraggingItem] = useState<DraggingItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [pendingAudioFile, setPendingAudioFile] = useState<File | null>(null);
+  const [pendingAudioFileId, setPendingAudioFileId] = useState<string | null>(null);
   
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -66,7 +66,7 @@ const SurveyEditor: React.FC = () => {
         }
         setIsLoading(false);
       } else {
-          setSurvey({ title: '', pages: [] });
+          setSurvey({ title: '', pages: [], audioFiles: [] });
       }
       setCurrentPageIndex(0);
     }
@@ -111,6 +111,76 @@ const SurveyEditor: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleAudioFilesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const audioFiles = Array.from(files).filter(file => file.type.startsWith('audio/'));
+    if (files.length > audioFiles.length) {
+      alert("Some files were not audio files and were ignored.");
+    }
+
+    const filePromises = audioFiles.map(file => {
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        alert(`${file.name} is too large. Files must be smaller than 10MB.`);
+        return null;
+      }
+      
+      return new Promise<AudioFile>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          // Create audio element to get duration
+          const audio = new Audio();
+          audio.onloadedmetadata = () => {
+            resolve({
+              id: `audio_${Date.now()}_${Math.random()}`,
+              name: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
+              audioUrl: reader.result as string,
+              duration: audio.duration
+            });
+          };
+          audio.onerror = () => {
+            resolve({
+              id: `audio_${Date.now()}_${Math.random()}`,
+              name: file.name.replace(/\.[^/.]+$/, ""),
+              audioUrl: reader.result as string
+            });
+          };
+          audio.src = reader.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }).filter(promise => promise !== null) as Promise<AudioFile>[];
+
+    Promise.all(filePromises).then(newAudioFiles => {
+      setSurvey(s => ({
+        ...s,
+        audioFiles: [...(s.audioFiles || []), ...newAudioFiles]
+      }));
+    }).catch(error => {
+      console.error('Audio files upload failed:', error);
+      alert('Failed to upload some audio files. Please try again.');
+    });
+
+    e.target.value = '';
+  };
+
+  const deleteAudioFile = (audioFileId: string) => {
+    // Remove audio file and all audio buttons that reference it
+    setSurvey(s => {
+      const newPages = s.pages?.map(page => ({
+        ...page,
+        audioButtons: page.audioButtons?.filter(ab => ab.audioFileId !== audioFileId) || []
+      })) || [];
+      
+      return {
+        ...s,
+        pages: newPages,
+        audioFiles: s.audioFiles?.filter(af => af.id !== audioFileId) || []
+      };
+    });
+  };
 
   const deletePage = (indexToDelete: number) => {
     setSurvey(s => {
@@ -132,8 +202,8 @@ const SurveyEditor: React.FC = () => {
     const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
 
     if (currentTool === 'AUDIO_BUTTON') {
-        if (pendingAudioFile) {
-          handleAudioButtonUpload(pendingAudioFile, xPercent, yPercent);
+        if (pendingAudioFileId) {
+          handleAudioButtonPlace(pendingAudioFileId, xPercent, yPercent);
         }
         return;
     }
@@ -173,39 +243,33 @@ const SurveyEditor: React.FC = () => {
     }
   };
 
-  const handleAudioButtonUpload = async (file: File, x: number, y: number) => {
-    try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const audioUrl = reader.result as string;
-        const newAudioButton: AudioButton = {
-          id: `audio_${Date.now()}`,
-          x,
-          y,
-          audioUrl,
-          label: file.name.replace(/\.[^/.]+$/, "") // Remove file extension
-        };
-
-        setSurvey(s => {
-          const newPages = [...(s.pages || [])];
-          const currentPage = { ...newPages[currentPageIndex] };
-          newPages[currentPageIndex] = {
-            ...currentPage,
-            audioButtons: [...(currentPage.audioButtons || []), newAudioButton]
-          };
-          return { ...s, pages: newPages };
-        });
-
-        setCurrentTool('NONE');
-        setPendingAudioFile(null);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('Audio upload failed:', error);
-      alert('Failed to upload audio file. Please try again.');
-      setPendingAudioFile(null);
-      setCurrentTool('NONE');
+  const handleAudioButtonPlace = (audioFileId: string, x: number, y: number) => {
+    const audioFile = survey.audioFiles?.find(af => af.id === audioFileId);
+    if (!audioFile) {
+      alert('Audio file not found.');
+      return;
     }
+
+    const newAudioButton: AudioButton = {
+      id: `audio_button_${Date.now()}`,
+      x,
+      y,
+      audioFileId,
+      label: audioFile.name
+    };
+
+    setSurvey(s => {
+      const newPages = [...(s.pages || [])];
+      const currentPage = { ...newPages[currentPageIndex] };
+      newPages[currentPageIndex] = {
+        ...currentPage,
+        audioButtons: [...(currentPage.audioButtons || []), newAudioButton]
+      };
+      return { ...s, pages: newPages };
+    });
+
+    setCurrentTool('NONE');
+    setPendingAudioFileId(null);
   };
 
   const handleDeleteAudioButton = (audioButtonId: string) => {
@@ -220,29 +284,20 @@ const SurveyEditor: React.FC = () => {
     });
   };
 
-  const handleAddAudioButtonClick = () => {
+  const handleSelectAudioFile = (audioFileId: string) => {
     if (!survey.pages || currentPageIndex >= survey.pages.length) {
       alert('Please select a page first.');
       return;
     }
 
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'audio/*';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        if (file.size > 10 * 1024 * 1024) {
-          alert('Audio file is too large. Please select a file smaller than 10MB.');
-          return;
-        }
-        
-        setPendingAudioFile(file);
-        setCurrentTool('AUDIO_BUTTON');
-        alert('Audio file selected! Now click on the image where you want to place the audio button.');
-      }
-    };
-    input.click();
+    if (!survey.audioFiles || survey.audioFiles.length === 0) {
+      alert('Please upload audio files first.');
+      return;
+    }
+
+    setPendingAudioFileId(audioFileId);
+    setCurrentTool('AUDIO_BUTTON');
+    alert('Audio file selected! Now click on the image where you want to place the audio button.');
   };
 
   const handleDeleteQuestion = (questionId: string) => {
@@ -512,6 +567,56 @@ const SurveyEditor: React.FC = () => {
           </div>
           <hr/>
           <div>
+            <h2 className="text-xl font-bold mb-4">Audio Files</h2>
+            {survey.audioFiles && survey.audioFiles.length > 0 ? (
+              <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                {survey.audioFiles.map((audioFile, index) => (
+                  <div key={audioFile.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
+                    <div className="flex items-center flex-1 min-w-0">
+                      <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center mr-2 flex-shrink-0 text-white text-xs font-bold">
+                        {index + 1}
+                      </div>
+                      <span className="text-sm font-medium truncate">
+                        {audioFile.name}
+                      </span>
+                      {audioFile.duration && (
+                        <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                          ({Math.floor(audioFile.duration / 60)}:{(audioFile.duration % 60).toFixed(0).padStart(2, '0')})
+                        </span>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => deleteAudioFile(audioFile.id)}
+                      className="p-1 text-red-500 hover:bg-red-100 rounded"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 text-center py-4">No audio files uploaded</p>
+            )}
+            
+            <div className="mt-4">
+              <label htmlFor="audio-files-upload" className="w-full text-center cursor-pointer px-4 py-2 bg-blue-500 text-white font-medium rounded-md hover:bg-blue-600 block">
+                Upload Audio Files
+              </label>
+              <input
+                id="audio-files-upload"
+                type="file"
+                accept="audio/*"
+                multiple
+                onChange={handleAudioFilesUpload}
+                className="hidden"
+              />
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Support multiple files: MP3, WAV, M4A (Max: 10MB each)
+              </p>
+            </div>
+          </div>
+          <hr/>
+          <div>
             <h2 className="text-xl font-bold mb-4">Pages</h2>
             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                 {survey.pages?.map((page, index) => (
@@ -538,42 +643,59 @@ const SurveyEditor: React.FC = () => {
             <h2 className="text-xl font-bold mb-4">Audio Buttons</h2>
             {currentPage && currentPage.audioButtons && currentPage.audioButtons.length > 0 ? (
               <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                {currentPage.audioButtons.map((audioButton, index) => (
-                  <div key={audioButton.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
-                    <div className="flex items-center flex-1 min-w-0">
-                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z"/>
-                        </svg>
+                {currentPage.audioButtons.map((audioButton, index) => {
+                  const audioFile = survey.audioFiles?.find(af => af.id === audioButton.audioFileId);
+                  const audioFileIndex = survey.audioFiles?.findIndex(af => af.id === audioButton.audioFileId) ?? -1;
+                  
+                  return (
+                    <div key={audioButton.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
+                      <div className="flex items-center flex-1 min-w-0">
+                        <div className="w-6 h-6 bg-purple-500 rounded flex items-center justify-center mr-2 flex-shrink-0 text-white text-xs font-bold">
+                          {audioFileIndex >= 0 ? audioFileIndex + 1 : '?'}
+                        </div>
+                        <span className="text-sm font-medium truncate">
+                          {audioFile?.name || 'Unknown Audio'}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium truncate">
-                        {audioButton.label || `Audio ${index + 1}`}
-                      </span>
+                      <button 
+                        onClick={() => handleDeleteAudioButton(audioButton.id)}
+                        className="p-1 text-red-500 hover:bg-red-100 rounded"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteAudioButton(audioButton.id)}
-                      className="p-1 text-red-500 hover:bg-red-100 rounded"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">No audio buttons on this page</p>
             )}
             
             <div className="mt-4">
-              <button
-                onClick={handleAddAudioButtonClick}
-                className="w-full px-4 py-2 bg-purple-500 text-white font-medium rounded-md hover:bg-purple-600 flex items-center justify-center"
-              >
-                <AudioIcon />
-                Add Audio Button
-              </button>
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Click button, select audio file, then click on image to place
-              </p>
+              {survey.audioFiles && survey.audioFiles.length > 0 ? (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Select audio to place:</p>
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {survey.audioFiles.map((audioFile, index) => (
+                      <button
+                        key={audioFile.id}
+                        onClick={() => handleSelectAudioFile(audioFile.id)}
+                        className="w-full flex items-center p-2 bg-white border border-gray-200 rounded-md hover:bg-blue-50 hover:border-blue-300 transition-colors text-left"
+                      >
+                        <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center mr-2 flex-shrink-0 text-white text-xs font-bold">
+                          {index + 1}
+                        </div>
+                        <span className="text-sm truncate">{audioFile.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-500 mb-2">Upload audio files first</p>
+                  <p className="text-xs text-gray-400">Then select and place them on the image</p>
+                </div>
+              )}
             </div>
           </div>
           <hr/>
@@ -591,7 +713,6 @@ const SurveyEditor: React.FC = () => {
                       <ToolButton icon={<TextInputIcon/>} text="Add Short Answer" onClick={() => setCurrentTool(QuestionType.SHORT_ANSWER)} active={currentTool === QuestionType.SHORT_ANSWER}/>
                       <ToolButton icon={<CheckCircleIcon/>} text="Add Single Choice" onClick={() => setCurrentTool(QuestionType.SINGLE_CHOICE)} active={currentTool === QuestionType.SINGLE_CHOICE}/>
                       <ToolButton icon={<ListChecksIcon/>} text="Add Multiple Choice" onClick={() => setCurrentTool(QuestionType.MULTIPLE_CHOICE)} active={currentTool === QuestionType.MULTIPLE_CHOICE}/>
-                      <ToolButton icon={<AudioIcon/>} text="Add Audio Button" onClick={() => setCurrentTool('AUDIO_BUTTON')} active={currentTool === 'AUDIO_BUTTON'}/>
                       <ToolButton icon={<MoveIcon/>} text="Move Tool" onClick={() => setCurrentTool('MOVE')} active={currentTool === 'MOVE'}/>
                       <ToolButton icon={<TrashIcon/>} text="Delete Tool" onClick={() => setCurrentTool('DELETE')} active={currentTool === 'DELETE'} isDelete/>
                   </div>

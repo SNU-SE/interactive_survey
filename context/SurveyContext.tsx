@@ -43,7 +43,55 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const surveysSnapshot = await getDocs(collection(db, 'surveys'));
         const surveysData: Survey[] = [];
         surveysSnapshot.forEach((doc) => {
-          surveysData.push({ id: doc.id, ...doc.data() } as Survey);
+          const rawData = doc.data();
+          const survey = { id: doc.id, ...rawData } as Survey;
+          
+          // Migration: ensure audioFiles array exists
+          if (!survey.audioFiles) {
+            survey.audioFiles = [];
+          }
+          
+          // Migration: convert legacy audioUrl to audioFiles and audioButtons
+          survey.pages = survey.pages.map(page => {
+            const migratedPage = { ...page };
+            
+            // Ensure audioButtons array exists
+            if (!migratedPage.audioButtons) {
+              migratedPage.audioButtons = [];
+            }
+            
+            // If page has legacy audioUrl but no audioButtons, migrate it
+            if (page.audioUrl && migratedPage.audioButtons.length === 0) {
+              // Create an AudioFile entry for the legacy audio
+              const audioFileId = `legacy-${page.id}`;
+              const audioFile = {
+                id: audioFileId,
+                name: `Audio for Page ${survey.pages.indexOf(page) + 1}`,
+                audioUrl: page.audioUrl,
+              };
+              
+              // Add to survey's audioFiles if not already there
+              if (!survey.audioFiles.find(af => af.id === audioFileId)) {
+                survey.audioFiles.push(audioFile);
+              }
+              
+              // Create an AudioButton referencing this file
+              const audioButton = {
+                id: `btn-${audioFileId}`,
+                x: 50, // Center position
+                y: 10, // Top position
+                audioFileId: audioFileId,
+                label: `Audio for Page ${survey.pages.indexOf(page) + 1}`,
+                audioUrl: page.audioUrl // Keep for backward compatibility
+              };
+              
+              migratedPage.audioButtons.push(audioButton);
+            }
+            
+            return migratedPage;
+          });
+          
+          surveysData.push(survey);
         });
         setSurveys(surveysData);
       } catch (error) {
