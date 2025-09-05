@@ -173,7 +173,7 @@ const SurveyTaker: React.FC = () => {
       >
         <MiniAudioPlayer 
           audioUrl={audioFile.audioUrl}
-          label={`${audioButtonNumber}. ${audioFile.name}`}
+          label={`${audioButtonNumber}`}
         />
       </div>
     );

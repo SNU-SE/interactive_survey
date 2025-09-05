@@ -653,8 +653,8 @@ const SurveyEditor: React.FC = () => {
                         <div className="w-6 h-6 bg-purple-500 rounded flex items-center justify-center mr-2 flex-shrink-0 text-white text-xs font-bold">
                           {audioFileIndex >= 0 ? audioFileIndex + 1 : '?'}
                         </div>
-                        <span className="text-sm font-medium truncate">
-                          {audioFile?.name || 'Unknown Audio'}
+                        <span className="text-sm font-medium truncate" title={audioFile?.name || 'Unknown Audio'}>
+                          Audio {audioFileIndex >= 0 ? audioFileIndex + 1 : '?'}
                         </span>
                       </div>
                       <button 
