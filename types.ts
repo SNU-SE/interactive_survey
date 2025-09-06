@@ -32,12 +32,14 @@ export interface ShortAnswerQuestion {
   y: number; // position as percentage
   width: number; // width as percentage
   height: number; // height as percentage
+  required?: boolean; // whether this question is required
 }
 
 export interface ChoiceQuestion {
   id: string;
   type: QuestionType.MULTIPLE_CHOICE | QuestionType.SINGLE_CHOICE;
   options: ChoiceOption[];
+  required?: boolean; // whether this question is required
 }
 
 export type Question = ShortAnswerQuestion | ChoiceQuestion;

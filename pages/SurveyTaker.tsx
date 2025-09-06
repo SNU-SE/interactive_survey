@@ -15,6 +15,36 @@ const SurveyTaker: React.FC = () => {
   const [answers, setAnswers] = useState<Map<string, string | string[]>>(new Map());
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [currentPlayingAudio, setCurrentPlayingAudio] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
+
+  const validateCurrentPage = () => {
+    if (!survey) return true;
+    
+    const currentPage = survey.pages[currentPageIndex];
+    const requiredQuestions = currentPage.questions.filter(q => q.required);
+    const errors = new Set<string>();
+    
+    requiredQuestions.forEach(question => {
+      const answer = answers.get(question.id);
+      
+      if (question.type === QuestionType.SHORT_ANSWER) {
+        if (!answer || (typeof answer === 'string' && answer.trim() === '')) {
+          errors.add(question.id);
+        }
+      } else if (question.type === QuestionType.SINGLE_CHOICE) {
+        if (!answer || answer === '') {
+          errors.add(question.id);
+        }
+      } else if (question.type === QuestionType.MULTIPLE_CHOICE) {
+        if (!answer || (Array.isArray(answer) && answer.length === 0)) {
+          errors.add(question.id);
+        }
+      }
+    });
+    
+    setValidationErrors(errors);
+    return errors.size === 0;
+  };
 
   useEffect(() => {
     const fetchSurvey = async () => {
@@ -86,18 +116,25 @@ const SurveyTaker: React.FC = () => {
   const renderQuestionForTaker = (q: Question) => {
     switch (q.type) {
       case QuestionType.SHORT_ANSWER:
+        const hasError = validationErrors.has(q.id);
         return (
           <div key={q.id} style={{ left: `${q.x}%`, top: `${q.y}%`, width: `${q.width}%`, height: `${q.height}%`, position: 'absolute' }}>
             <textarea 
-              placeholder="Type your answer here..."
+              placeholder={q.required ? "Type your answer here... *" : "Type your answer here..."}
               value={(answers.get(q.id) as string) || ''}
               onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-              className="w-full h-full p-2 border-2 border-blue-500 bg-white rounded-md shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" 
+              className={`w-full h-full p-2 border-2 bg-white rounded-md shadow-md focus:outline-none focus:ring-2 resize-none ${
+                hasError ? 'border-red-500 focus:ring-red-400' : 'border-blue-500 focus:ring-blue-400'
+              }`}
             />
+            {q.required && (
+              <span className="absolute -top-1 -right-1 text-red-500 font-bold text-lg">*</span>
+            )}
           </div>
         );
       case QuestionType.SINGLE_CHOICE:
-        return q.options.map(opt => (
+        const singleHasError = validationErrors.has(q.id);
+        return q.options.map((opt, index) => (
           <div key={opt.id} style={{ left: `${opt.x}%`, top: `${opt.y}%`, position: 'absolute', transform: 'translate(-50%, -50%)' }}>
             <input
               type="radio"
@@ -108,11 +145,18 @@ const SurveyTaker: React.FC = () => {
               onChange={() => handleAnswerChange(q.id, opt.id)}
               className="absolute opacity-0 w-8 h-8 cursor-pointer peer z-10"
             />
-            <div className="w-8 h-8 rounded-full shadow-lg transition-colors border-2 bg-white border-slate-400 peer-hover:border-slate-600 peer-checked:bg-slate-800 peer-checked:border-slate-800 transform peer-hover:scale-110"></div>
+            <div className={`w-8 h-8 rounded-full shadow-lg transition-colors border-2 bg-white transform peer-hover:scale-110 ${
+              singleHasError ? 'border-red-400 peer-hover:border-red-600' : 'border-slate-400 peer-hover:border-slate-600'
+            } peer-checked:bg-slate-800 peer-checked:border-slate-800 relative`}>
+              {q.required && index === 0 && (
+                <span className="absolute -top-1 -right-1 text-red-500 font-bold text-sm bg-white rounded-full w-3 h-3 flex items-center justify-center" style={{ fontSize: '10px' }}>*</span>
+              )}
+            </div>
           </div>
         ));
       case QuestionType.MULTIPLE_CHOICE:
-        return q.options.map(opt => {
+        const multipleHasError = validationErrors.has(q.id);
+        return q.options.map((opt, index) => {
           const isChecked = (answers.get(q.id) as string[] || []).includes(opt.id);
           return (
             <div key={opt.id} style={{ left: `${opt.x}%`, top: `${opt.y}%`, position: 'absolute', transform: 'translate(-50%, -50%)' }}>
@@ -125,8 +169,13 @@ const SurveyTaker: React.FC = () => {
                 onChange={() => handleAnswerChange(q.id, opt.id)}
                 className="absolute opacity-0 w-8 h-8 cursor-pointer peer z-10"
               />
-              <div className="w-8 h-8 rounded-md shadow-lg transition-colors border-2 bg-white border-slate-400 peer-hover:border-slate-600 peer-checked:bg-slate-800 peer-checked:border-slate-800 transform peer-hover:scale-110 flex items-center justify-center">
+              <div className={`w-8 h-8 rounded-md shadow-lg transition-colors border-2 bg-white transform peer-hover:scale-110 flex items-center justify-center relative ${
+                multipleHasError ? 'border-red-400 peer-hover:border-red-600' : 'border-slate-400 peer-hover:border-slate-600'
+              } peer-checked:bg-slate-800 peer-checked:border-slate-800`}>
                 {isChecked && <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
+                {q.required && index === 0 && (
+                  <span className="absolute -top-1 -right-1 text-red-500 font-bold text-sm bg-white rounded-full w-3 h-3 flex items-center justify-center" style={{ fontSize: '10px' }}>*</span>
+                )}
               </div>
             </div>
           );
@@ -221,13 +270,25 @@ const SurveyTaker: React.FC = () => {
         </span>
         {currentPageIndex < survey.pages.length - 1 ? (
             <button
-                onClick={() => setCurrentPageIndex(i => i + 1)}
+                onClick={() => {
+                  if (validateCurrentPage()) {
+                    setCurrentPageIndex(i => i + 1);
+                  } else {
+                    alert('필수 문항을 모두 작성해주세요.');
+                  }
+                }}
                 className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-colors"
             >
                 Next
             </button>
         ) : (
-             <button onClick={handleSubmit} className="px-12 py-4 bg-green-600 text-white font-bold text-lg rounded-lg shadow-md hover:bg-green-700 transition-transform transform hover:scale-105">
+             <button onClick={() => {
+               if (validateCurrentPage()) {
+                 handleSubmit();
+               } else {
+                 alert('필수 문항을 모두 작성해주세요.');
+               }
+             }} className="px-12 py-4 bg-green-600 text-white font-bold text-lg rounded-lg shadow-md hover:bg-green-700 transition-transform transform hover:scale-105">
                 Submit My Answers
             </button>
         )}

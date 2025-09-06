@@ -223,10 +223,10 @@ const SurveyEditor: React.FC = () => {
         } else {
             let newQuestion: Question;
             if (currentTool === QuestionType.SHORT_ANSWER) {
-                newQuestion = { id: `q${Date.now()}`, type: QuestionType.SHORT_ANSWER, x: xPercent, y: yPercent, width: 30, height: 8 };
+                newQuestion = { id: `q${Date.now()}`, type: QuestionType.SHORT_ANSWER, x: xPercent, y: yPercent, width: 30, height: 8, required: false };
                 currentQuestions.push(newQuestion);
             } else {
-                newQuestion = { id: `q${Date.now()}`, type: currentTool as QuestionType.SINGLE_CHOICE | QuestionType.MULTIPLE_CHOICE, options: [{ id: `o${Date.now()}`, x: xPercent, y: yPercent }] };
+                newQuestion = { id: `q${Date.now()}`, type: currentTool as QuestionType.SINGLE_CHOICE | QuestionType.MULTIPLE_CHOICE, options: [{ id: `o${Date.now()}`, x: xPercent, y: yPercent }], required: false };
                 currentQuestions.push(newQuestion);
             }
         }
@@ -331,6 +331,19 @@ const SurveyEditor: React.FC = () => {
       setIsEditingQuestion(false);
       setCurrentTool('NONE');
   }
+
+  const toggleQuestionRequired = (questionId: string) => {
+    setSurvey(s => {
+      const newPages = [...(s.pages || [])];
+      const currentPage = { ...newPages[currentPageIndex] };
+      const updatedQuestions = currentPage.questions.map(q => 
+        q.id === questionId ? { ...q, required: !q.required } : q
+      );
+      currentPage.questions = updatedQuestions;
+      newPages[currentPageIndex] = currentPage;
+      return { ...s, pages: newPages };
+    });
+  };
 
   const handleSave = async () => {
     if (!survey.title || !survey.pages || survey.pages.length === 0) {
@@ -494,8 +507,11 @@ const SurveyEditor: React.FC = () => {
       case QuestionType.SHORT_ANSWER:
         return (
           <div key={q.id} style={{ left: `${q.x}%`, top: `${q.y}%`, width: `${q.width}%`, height: `${q.height}%`, position: 'absolute', cursor: isMoveMode ? 'move' : 'default' }}>
-            <div className="w-full h-full p-2 border-2 border-dashed border-blue-500 bg-blue-100 bg-opacity-50 rounded-md shadow-md text-center text-blue-800 font-semibold flex items-center justify-center">
+            <div className="w-full h-full p-2 border-2 border-dashed border-blue-500 bg-blue-100 bg-opacity-50 rounded-md shadow-md text-center text-blue-800 font-semibold flex items-center justify-center relative">
               Short Answer
+              {q.required && (
+                <span className="absolute -top-1 -right-1 text-red-500 font-bold text-lg">*</span>
+              )}
             </div>
             {isDeleteMode && (
                 <div onClick={() => handleDeleteQuestion(q.id)} className="absolute inset-0 bg-red-500 bg-opacity-50 flex items-center justify-center cursor-pointer rounded-md group">
@@ -515,10 +531,13 @@ const SurveyEditor: React.FC = () => {
           <React.Fragment key={q.id}>
             {q.options.map((opt, index) => (
               <div key={opt.id} style={{ left: `${opt.x}%`, top: `${opt.y}%`, position: 'absolute', transform: 'translate(-50%, -50%)', cursor: isMoveMode ? 'move' : 'default' }}>
-                <div className={`w-6 h-6 border-4 border-white ${bgClass} ${shapeClass} shadow-lg ring-2 ${ringClass} flex items-center justify-center`}>
+                <div className={`w-6 h-6 border-4 border-white ${bgClass} ${shapeClass} shadow-lg ring-2 ${ringClass} flex items-center justify-center relative`}>
                    <span className="text-xs font-bold text-white select-none" style={{ textShadow: '0 0 3px rgba(0,0,0,0.7)' }}>
                     {index + 1}
                    </span>
+                   {q.required && index === 0 && (
+                     <span className="absolute -top-1 -right-1 text-red-500 font-bold text-sm bg-white rounded-full w-3 h-3 flex items-center justify-center" style={{ fontSize: '10px' }}>*</span>
+                   )}
                 </div>
                 {isDeleteMode && (
                   <div onClick={() => handleDeleteOption(q.id, opt.id)} className={`absolute -inset-1 bg-red-500 bg-opacity-50 flex items-center justify-center cursor-pointer ${shapeClass} group`}>
@@ -785,6 +804,53 @@ const SurveyEditor: React.FC = () => {
                       <ToolButton icon={<TrashIcon/>} text="Delete Tool" onClick={() => setCurrentTool('DELETE')} active={currentTool === 'DELETE'} isDelete/>
                   </div>
               )}
+          </div>
+          <hr/>
+          <div>
+            <h2 className="text-xl font-bold mb-4">Questions</h2>
+            {currentPage && currentPage.questions && currentPage.questions.length > 0 ? (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                {currentPage.questions.map((question, index) => (
+                  <div key={question.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md">
+                    <div className="flex items-center flex-1 min-w-0">
+                      <div className={`w-6 h-6 rounded flex items-center justify-center mr-2 flex-shrink-0 text-white text-xs font-bold ${
+                        question.type === QuestionType.SHORT_ANSWER ? 'bg-blue-500' : 
+                        question.type === QuestionType.SINGLE_CHOICE ? 'bg-red-500' : 'bg-green-500'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <span className="text-sm font-medium truncate">
+                        {question.type === QuestionType.SHORT_ANSWER ? 'Short Answer' :
+                         question.type === QuestionType.SINGLE_CHOICE ? 'Single Choice' : 'Multiple Choice'}
+                      </span>
+                      {question.required && (
+                        <span className="text-red-500 ml-1 text-sm font-bold">*</span>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={question.required || false}
+                          onChange={() => toggleQuestionRequired(question.id)}
+                          className="sr-only"
+                        />
+                        <div className={`w-10 h-5 rounded-full transition-colors ${
+                          question.required ? 'bg-blue-500' : 'bg-gray-300'
+                        } relative`}>
+                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${
+                            question.required ? 'translate-x-5' : 'translate-x-0.5'
+                          } absolute top-0.5`}></div>
+                        </div>
+                        <span className="ml-2 text-xs text-gray-600">Required</span>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 text-center py-4">No questions on this page</p>
+            )}
           </div>
            <hr/>
            <button 
