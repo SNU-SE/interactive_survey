@@ -58,6 +58,8 @@ export interface Survey {
   audioFiles: AudioFile[]; // global audio files pool
   code?: string; // short code like 123-456
   submissionCount?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface Answer {

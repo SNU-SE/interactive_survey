@@ -9,6 +9,25 @@ const TeacherDashboard: React.FC = () => {
   const [surveyToDelete, setSurveyToDelete] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Sort surveys by creation date (newest first)
+  const sortedSurveys = surveys.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  const formatDate = (date: Date | undefined) => {
+    if (!date) return 'Unknown date';
+    const d = new Date(date);
+    return d.toLocaleDateString('ko-KR', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div className="container mx-auto p-8">
       <div className="flex justify-between items-center mb-6">
@@ -22,9 +41,9 @@ const TeacherDashboard: React.FC = () => {
         <h2 className="text-xl font-semibold mb-4 text-slate-700">Your Surveys</h2>
         {loadingSurveys ? (
           <p className="text-slate-500">Loading surveys...</p>
-        ) : surveys.length > 0 ? (
+        ) : sortedSurveys.length > 0 ? (
           <ul className="space-y-3">
-            {surveys.map(survey => (
+            {sortedSurveys.map(survey => (
               <li key={survey.id} className="p-4 border rounded-md flex justify-between items-center hover:bg-slate-50">
                 <div>
                   <h3 className="font-semibold text-slate-800">{survey.title}</h3>
@@ -32,6 +51,9 @@ const TeacherDashboard: React.FC = () => {
                     Code: <span className="font-mono bg-slate-200 px-2 py-1 rounded">{survey.code || survey.id}</span>
                     <span className="ml-4">Pages: {survey.pages.length}</span>
                     <span className="ml-4">Submissions: {survey.submissionCount || 0}</span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Created: {formatDate(survey.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -115,21 +137,5 @@ const TeacherDashboard: React.FC = () => {
     </div>
   );
 };
-
-  const handleDeleteSurvey = async () => {
-    if (!surveyToDelete) return;
-    
-    setIsDeleting(true);
-    try {
-      await deleteSurvey(surveyToDelete.id);
-      setShowDeleteModal(false);
-      setSurveyToDelete(null);
-    } catch (error) {
-      console.error('Delete error:', error);
-      alert('설문 삭제 중 오류가 발생했습니다.');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
 export default TeacherDashboard;
