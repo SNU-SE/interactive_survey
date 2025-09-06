@@ -21,7 +21,13 @@ const SurveyTaker: React.FC = () => {
       setLoading(true);
       if (id) {
         const surveyData = await getSurvey(id);
+        console.log(`🎯 [SurveyTaker] Received survey data for ID ${id}:`, surveyData);
+        
         if (surveyData) {
+          console.log(`🎯 [SurveyTaker] Survey audioFiles:`, surveyData.audioFiles);
+          surveyData.pages.forEach((page, index) => {
+            console.log(`🎯 [SurveyTaker] Page ${index} audioButtons:`, page.audioButtons);
+          });
           setSurvey(surveyData);
           // Start with no pre-selected answers
           setAnswers(new Map());
@@ -131,8 +137,13 @@ const SurveyTaker: React.FC = () => {
   };
 
   const renderAudioButtonForTaker = (audioButton: AudioButton) => {
+    console.log(`🎵 [SurveyTaker] Rendering audioButton:`, audioButton);
+    console.log(`🎵 [SurveyTaker] Available audioFiles:`, survey?.audioFiles);
+    
     // Get the audio file from the global pool
-    const audioFile = survey?.audioFiles.find(af => af.id === audioButton.audioFileId);
+    const audioFile = survey?.audioFiles?.find(af => af.id === audioButton.audioFileId);
+    console.log(`🎵 [SurveyTaker] Found audioFile for ${audioButton.audioFileId}:`, audioFile);
+    
     if (!audioFile) {
       // Fallback for legacy data
       if (audioButton.audioUrl) {

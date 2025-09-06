@@ -46,6 +46,7 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         surveysSnapshot.forEach((doc) => {
           const rawData = doc.data();
           const survey = { id: doc.id, ...rawData } as Survey;
+          console.log(`🔍 [Migration] Processing survey ${survey.id}:`, survey);
           
           // Migration: ensure audioFiles array exists
           if (!survey.audioFiles) {
@@ -63,6 +64,7 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             
             // If page has legacy audioUrl but no audioButtons, migrate it
             if (page.audioUrl && migratedPage.audioButtons.length === 0) {
+              console.log(`🔄 [Migration] Page-level audioUrl migration for page ${page.id}`);
               // Create an AudioFile entry for the legacy audio
               const audioFileId = `legacy-${page.id}`;
               const audioFile = {
@@ -89,6 +91,52 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               migratedPage.audioButtons.push(audioButton);
             }
             
+            // NEW: Migrate audioButtons with legacy audioUrl
+            migratedPage.audioButtons = migratedPage.audioButtons.map(audioButton => {
+              console.log(`🔄 [Migration] Processing audioButton ${audioButton.id}:`, audioButton);
+              
+              // If audioButton has audioUrl but no audioFileId, migrate it
+              if (audioButton.audioUrl && !audioButton.audioFileId) {
+                console.log(`🔄 [Migration] AudioButton-level migration for button ${audioButton.id}`);
+                const audioFileId = `legacy-button-${audioButton.id}`;
+                
+                // Create AudioFile entry if not exists
+                if (!survey.audioFiles.find(af => af.id === audioFileId)) {
+                  const audioFile = {
+                    id: audioFileId,
+                    name: audioButton.label || `Audio Button ${audioButton.id}`,
+                    audioUrl: audioButton.audioUrl,
+                  };
+                  survey.audioFiles.push(audioFile);
+                  console.log(`➕ [Migration] Created audioFile:`, audioFile);
+                }
+                
+                // Add audioFileId to the button (keep audioUrl for fallback)
+                return {
+                  ...audioButton,
+                  audioFileId: audioFileId
+                };
+              }
+              
+              // If audioButton has audioFileId, verify the audioFile exists
+              if (audioButton.audioFileId && !survey.audioFiles.find(af => af.id === audioButton.audioFileId)) {
+                console.log(`⚠️ [Migration] Missing audioFile for audioFileId: ${audioButton.audioFileId}`);
+                
+                // If we have a fallback audioUrl, create the missing audioFile
+                if (audioButton.audioUrl) {
+                  const audioFile = {
+                    id: audioButton.audioFileId,
+                    name: audioButton.label || `Audio Button ${audioButton.id}`,
+                    audioUrl: audioButton.audioUrl,
+                  };
+                  survey.audioFiles.push(audioFile);
+                  console.log(`🔧 [Migration] Recreated missing audioFile:`, audioFile);
+                }
+              }
+              
+              return audioButton;
+            });
+            
             return migratedPage;
           });
           
@@ -108,14 +156,114 @@ export const SurveyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const getSurvey = useCallback(async (idOrCode: string) => {
     const byId = surveys.find(s => s.id === idOrCode);
-    if (byId) return byId;
+    if (byId) {
+      return byId;
+    }
+    
     // If not found by id and looks like ###-###, try by code
     if (/^\d{3}-\d{3}$/.test(idOrCode)) {
       try {
         const qSnap = await getDocs(query(collection(db, 'surveys'), where('code', '==', idOrCode)));
         if (!qSnap.empty) {
           const d = qSnap.docs[0];
-          return { id: d.id, ...(d.data() as Omit<Survey, 'id'>) } as Survey;
+          const rawSurvey = { id: d.id, ...(d.data() as Omit<Survey, 'id'>) } as Survey;
+          
+          // Apply migration logic (same as in loadSurveys)
+          const migratedSurvey = { ...rawSurvey };
+          
+          // Migration: ensure audioFiles array exists
+          if (!migratedSurvey.audioFiles) {
+            migratedSurvey.audioFiles = [];
+          }
+          
+          // Migration: convert legacy audioUrl to audioFiles and audioButtons
+          migratedSurvey.pages = migratedSurvey.pages.map(page => {
+            const migratedPage = { ...page };
+            
+            // Ensure audioButtons array exists
+            if (!migratedPage.audioButtons) {
+              migratedPage.audioButtons = [];
+            }
+            
+            // If page has legacy audioUrl but no audioButtons, migrate it
+            if (page.audioUrl && migratedPage.audioButtons.length === 0) {
+              console.log(`🔄 [getSurvey Migration] Page-level audioUrl migration for page ${page.id}`);
+              // Create an AudioFile entry for the legacy audio
+              const audioFileId = `legacy-${page.id}`;
+              const audioFile = {
+                id: audioFileId,
+                name: `Audio for Page ${migratedSurvey.pages.indexOf(page) + 1}`,
+                audioUrl: page.audioUrl,
+              };
+              
+              // Add to survey's audioFiles if not already there
+              if (!migratedSurvey.audioFiles.find(af => af.id === audioFileId)) {
+                migratedSurvey.audioFiles.push(audioFile);
+              }
+              
+              // Create an AudioButton referencing this file
+              const audioButton = {
+                id: `btn-${audioFileId}`,
+                x: 50, // Center position
+                y: 10, // Top position
+                audioFileId: audioFileId,
+                label: `Audio for Page ${migratedSurvey.pages.indexOf(page) + 1}`,
+                audioUrl: page.audioUrl // Keep for backward compatibility
+              };
+              
+              migratedPage.audioButtons.push(audioButton);
+            }
+            
+            // NEW: Migrate audioButtons with legacy audioUrl
+            migratedPage.audioButtons = migratedPage.audioButtons.map(audioButton => {
+              console.log(`🔄 [getSurvey Migration] Processing audioButton ${audioButton.id}:`, audioButton);
+              
+              // If audioButton has audioUrl but no audioFileId, migrate it
+              if (audioButton.audioUrl && !audioButton.audioFileId) {
+                console.log(`🔄 [getSurvey Migration] AudioButton-level migration for button ${audioButton.id}`);
+                const audioFileId = `legacy-button-${audioButton.id}`;
+                
+                // Create AudioFile entry if not exists
+                if (!migratedSurvey.audioFiles.find(af => af.id === audioFileId)) {
+                  const audioFile = {
+                    id: audioFileId,
+                    name: audioButton.label || `Audio Button ${audioButton.id}`,
+                    audioUrl: audioButton.audioUrl,
+                  };
+                  migratedSurvey.audioFiles.push(audioFile);
+                  console.log(`➕ [getSurvey Migration] Created audioFile:`, audioFile);
+                }
+                
+                // Add audioFileId to the button (keep audioUrl for fallback)
+                return {
+                  ...audioButton,
+                  audioFileId: audioFileId
+                };
+              }
+              
+              // If audioButton has audioFileId, verify the audioFile exists
+              if (audioButton.audioFileId && !migratedSurvey.audioFiles.find(af => af.id === audioButton.audioFileId)) {
+                console.log(`⚠️ [getSurvey Migration] Missing audioFile for audioFileId: ${audioButton.audioFileId}`);
+                
+                // If we have a fallback audioUrl, create the missing audioFile
+                if (audioButton.audioUrl) {
+                  const audioFile = {
+                    id: audioButton.audioFileId,
+                    name: audioButton.label || `Audio Button ${audioButton.id}`,
+                    audioUrl: audioButton.audioUrl,
+                  };
+                  migratedSurvey.audioFiles.push(audioFile);
+                  console.log(`🔧 [getSurvey Migration] Recreated missing audioFile:`, audioFile);
+                }
+              }
+              
+              return audioButton;
+            });
+            
+            return migratedPage;
+          });
+          
+          return migratedSurvey;
         }
       } catch (e) {
         console.error('Failed to query survey by code', e);

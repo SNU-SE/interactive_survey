@@ -347,7 +347,8 @@ const SurveyEditor: React.FC = () => {
       } else {
           const finalSurvey: Omit<Survey, 'id'> = {
               title: survey.title!,
-              pages: survey.pages!
+              pages: survey.pages!,
+              audioFiles: survey.audioFiles || []
           };
           const newSurvey = await addSurvey(finalSurvey);
           navigate(`/edit/${newSurvey.id}`);
